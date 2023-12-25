@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>选择聊天方式</title>
+    <link rel="stylesheet" href="/css/bootstrap/bootstrap.css">
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+<div class="text-center">
+    <h1>欢迎您，<span th:if="${vip}" style="color: red">尊贵的VIP用户，</span><span th:utext="${#httpSession.getAttribute('username')}"></span> <span th:if="${!vip}" style="color: red"><a href="/ktvip">开通VIP</a> </span></h1>
+    <a href="/room" class="btn btn-primary">聊天室</a>
+    <a href="/friend" class="btn btn-primary">好友私聊</a>
+</div>
+</body>
+</html>

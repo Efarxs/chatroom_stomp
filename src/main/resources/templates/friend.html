@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>好友聊天</title>
+    <link rel="stylesheet" href="/css/bootstrap/bootstrap.css">
+    <link rel="stylesheet" href="/css/bootstrap/toastr.min.css">
+    <script src="/js/jquery/jquery-3.6.4.js"></script>
+    <script src="/js/bootstrap/bootstrap.bundle.js"></script>
+    <script src="/js/websocket/sockjs.min.js"></script>
+    <script src="/js/websocket/stomp.min.js"></script>
+    <script src="/js/bootstrap/toastr.min.js"></script>
+    <script src="/js/l2dwidget/L2Dwidget.min.js"></script>
+    <style>
+        body {
+            padding-top: 50px;
+        }
+
+        #messageArea {
+            height: 580px;
+            overflow-y: scroll;
+        }
+
+        #message {
+            resize: none; /* 防止用户调整大小 */
+            overflow-y: auto; /* 内容过多时显示滚动条 */
+        }
+
+        .chat-message {
+            margin: 5px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .my-message {
+            text-align: right;
+        }
+
+        .other-message {
+            text-align: left;
+        }
+
+        .event-message {
+            color: #999;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+<input type="hidden" id="name" th:value="${#httpServletRequest.getSession().getAttribute('username')}"/>
+<div id="login-page" class="container">
+    <div class="row justify-content-center align-items-center" style="height:100vh;">
+        <div class="col-4">
+            <div class="form-group">
+                <input type="text" id="friendname" class="form-control" placeholder="输入好友用户名"/>
+                <button class="btn btn-primary mt-2" onclick="gotoChat();">进入聊天</button>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="container">
+    <h1>私聊模式（与[<span id="friendNameSpan"></span>]聊天中）</h1>
+</div>
+<div id="chat-page" class="container d-none">
+    <div class="row justify-content-center">
+        <div class="col-8">
+            <ul id="messageArea" class="list-unstyled"></ul>
+            <div class="form-group mt-3">
+                <textarea id="message" class="form-control" placeholder="输入聊天内容..." rows="4"></textarea>
+                <button class="btn btn-primary mt-2" onclick="sendMessage();">发送</button>
+                <button class="btn btn-warning mt-2" id="startRecord">开始录音</button>
+                <button class="btn btn-danger mt-2" id="stopRecord" disabled>停止录音</button>
+                <button class="btn btn-dark mt-2" onclick="window.location.href='/main'">返回主页</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script th:inline="javascript">
+    /*<![CDATA[*/
+
+    let stompClient = null;
+    let username = $("#name").val().trim();
+    let friendName = null;
+
+    /**
+     * 录音数据
+     */
+    let mediaRecorder;
+    let audioChunks = [];
+
+    function gotoChat() {
+        friendName = $("#friendname").val().trim();
+        if (friendName && friendName !== "") {
+            if (friendName == username) {
+                toastr.warning("不能与自己聊天哦");
+                return false;
+            }
+            $.ajax({
+                url: "/checkFriend",
+                async: false,
+                type: "POST",
+                data: {"username": friendName},
+                success: function (data) {
+                    if (data === "success") {
+                        $("#friendNameSpan").html(friendName);
+                        connect();
+                    } else {
+                        toastr.warning("用户不存在");
+                    }
+                }
+            });
+        } else {
+            toastr.warning("请输入好友用户名");
+        }
+    }
+
+    function connect() {
+        let socket = new SockJS('/chat');
+        stompClient = Stomp.over(socket);
+        stompClient.connect({}, function (frame) {
+            $('#login-page').hide();
+            $('#chat-page').show();
+            stompClient.subscribe('/private/' + username + "/queue", function (greeting) {
+                showMessage(JSON.parse(greeting.body));
+            });
+            $('#login-page').addClass('d-none');
+            $('#chat-page').removeClass('d-none');
+            initMessage();
+            initL2DModel();
+        });
+    }
+
+    function initL2DModel() {
+        L2Dwidget.init({
+            "model": {
+                "jsonPath": "/models/wanko/assets/wanko.model.json", // 模型的路径
+                "scale": 1 // 放大模型
+            },
+            "display": {
+                "position": "left", // 模型位置改为左侧
+                "width": 300, // 宽度调整
+                "height": 300, // 高度调整
+                "hOffset": 0, // 水平偏移
+                "vOffset": 0 // 垂直偏移
+            },
+            "mobile": {
+                "show": true,
+                "scale": 0.5 // 移动设备上的缩放
+            },
+            "react": {
+                "opacityDefault": 0.7, // 默认不透明度
+                "opacityOnHover": 0.8 // 鼠标悬停时的不透明度
+            }
+        });
+    }
+
+    /**
+     * 初始化聊天信息
+     */
+    function initMessage() {
+        $.ajax({
+            url: "/initPrivateMessage/" + friendName,
+            async: false,
+            type: "POST",
+            data: {},
+            success: function (data) {
+                if (data && data.length > 0) {
+                    for (let i = 0; i < data.length; i++) {
+                        showMessage(data[i]);
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * 发送聊天信息
+     */
+    function sendMessage() {
+        let messageContent = $("#message").val().trim();
+        if (messageContent && stompClient) {
+            let chatMessage = {
+                sender: username,
+                content: messageContent,
+                type: 'CHAT',
+                toUser: friendName
+            };
+            stompClient.send("/app/chat.sendPrivateMessage", {}, JSON.stringify(chatMessage));
+            $('#message').val('');
+        }
+    }
+
+    /**
+     * 显示聊天信息
+     * @param message
+     */
+    function showMessage(message) {
+        let messageElement = $('<li class="chat-message"></li>');
+        if (message.type === 'CHAT') {
+            let alignmentClass = message.sender === username ? 'my-message' : 'other-message';
+            messageElement.addClass(alignmentClass);
+            messageElement.html('<strong>' + message.sender + '</strong><br/>' + message.content);
+        } else {
+            messageElement.addClass('event-message');
+            messageElement.text('-- ' + message.sender + ' ' + message.content + ' --');
+        }
+        $('#messageArea').append(messageElement);
+        $('#messageArea').scrollTop($('#messageArea')[0].scrollHeight);
+    }
+
+    /**
+     * 发送语音信息
+     */
+    function sendAudioMessage(url) {
+        if (url && stompClient) {
+            let chatMessage = {
+                sender: username,
+                content: `<audio id="audio" src="${url}" controls></audio>`,
+                type: 'CHAT',
+                toUser: friendName
+            };
+            stompClient.send("/app/chat.sendPrivateMessage", {}, JSON.stringify(chatMessage));
+        }
+    }
+
+    /**
+     * 上传录音
+     * @param audioBlob
+     */
+    function uploadAudio(audioBlob) {
+        const formData = new FormData();
+        formData.append("audio", audioBlob, "audio.wav");
+
+        $.ajax({
+            url: '/upload', // 更换为您的后端接口
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            dataType: "json",
+            success: function (res) {
+                // 发送消息
+                sendAudioMessage(res.data.url);
+            },
+            error: function (error) {
+                console.error("上传失败:", error);
+            }
+        });
+    }
+
+    $(document).ready(function () {
+        $('#message').keypress(function (event) {
+            let messageContent = $(this).val().trim();
+            if (event.which === 13 && !event.shiftKey) { // 如果是回车键而不是Shift+回车
+                event.preventDefault(); // 阻止默认行为（避免换行）
+                if (messageContent && messageContent.length <= 500) {
+                    sendMessage();
+                } else if (messageContent.length > 500) {
+                    toastr.warning('不能发送超过500个字符的消息。');
+                }
+            }
+        });
+
+        // 开始录音
+        $('#startRecord').click(function (event) {
+            navigator.mediaDevices.getUserMedia({audio: true})
+                .then(stream => {
+                    mediaRecorder = new MediaRecorder(stream);
+                    mediaRecorder.ondataavailable = e => {
+                        audioChunks.push(e.data);
+                    };
+                    // 停止录音
+                    mediaRecorder.onstop = e => {
+                        const audioBlob = new Blob(audioChunks, {type: 'audio/wav'});
+                        uploadAudio(audioBlob);
+                        audioChunks = [];
+                    };
+                    mediaRecorder.start();
+                    $("#stopRecord").prop("disabled", false);
+                    $("#startRecord").prop("disabled", true);
+                });
+        });
+        $("#stopRecord").click(() => {
+            mediaRecorder.stop();
+            $("#stopRecord").prop("disabled", true);
+            $("#startRecord").prop("disabled", false);
+        })
+    });
+    /*]]>*/
+</script>
+</body>
+</html>

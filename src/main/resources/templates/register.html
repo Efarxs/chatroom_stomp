@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="/css/bootstrap/bootstrap.css" rel="stylesheet">
+    <title>用户注册</title>
+    <style>
+        .captcha-image {
+            display: inline-block;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div th:if="${msg != null}" class="alert alert-warning">
+        <a class="close" data-dismiss="alert">×</a>
+        <strong>错误！</strong><p th:utext="${msg}"></p>
+    </div>
+    <h2>用户注册</h2>
+    <form action="/toRegister" method="post">
+        <div class="form-group">
+            <label for="username">用户名:</label>
+            <input type="text" class="form-control" id="username" name="username" placeholder="请输入你的用户名">
+        </div>
+        <div class="form-group">
+            <label for="password">密码:</label>
+            <input type="password" class="form-control" id="password" name="password" placeholder="请输入你的密码">
+        </div>
+        <div class="form-group">
+            <label for="captcha">验证码:</label>
+            <input type="text" class="form-control" id="captcha" name="captcha" placeholder="请输入下方验证码">
+            <img src="/captcha" onclick="this.src='/captcha?r=' + Math.random()" alt="验证码图片" class="captcha-image">
+        </div>
+        <button type="submit" class="btn btn-primary">注册</button>
+        <a href="/login" class="btn btn-warning">登录</a>
+    </form>
+</div>
+
+<script src="/js/jquery/jquery-3.6.4.js"></script>
+<script src="/js/bootstrap/bootstrap.bundle.js"></script>
+</body>
+</html>

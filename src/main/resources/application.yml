@@ -1,0 +1,8 @@
+spring:
+  datasource:
+    url: jdbc:sqlite:chatSystem.db
+    driver-class-name: org.sqlite.JDBC
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
